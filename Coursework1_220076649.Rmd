@@ -1,0 +1,149 @@
+---
+title: "Forecasting Future Revenue" 
+subtitle: "Coursework 1 -- Time Series" 
+author: "Najwa Irdina Binti Hassan" 
+date: "15/3/2025" 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: spacelab 
+    highlight: tango
+---
+ 
+```{r, echo=FALSE}
+# This code will display the QMUL logo at the top right of the page
+# Do not change this code
+htmltools::img(src = knitr::image_uri("images/QMlogo.png"),
+               alt = 'logo',
+               style = 'position:absolute; top:0; right:0; padding:10px; width:20%;')
+```
+
+# 1. Introduction
+In this article, we aim to forecast monthly revenue data using Meta’s Prophet forecasting system. Company forecast future revenue to help in their decision making.
+
+
+# 2. Preparing the Data
+## 2.1 Installing the library
+First, we load the necessary library. If we use it for the first time, install the packages in R with the command: install.packages()
+
+```{r}
+library(prophet)
+```
+
+
+## 2.2 Importing the dataset
+The dataset is imported from Kaggle. It contains 64 observations of revenue, sales quantity, average cost, and average annual payroll of the region for every month from January 2015 to April 2020.
+
+```{r}
+OriginalData <- read.csv("data/Month_Value_1.csv")
+
+#displays the first 6 rows of the data
+head(OriginalData)
+
+#See the structure of the dataframe
+str(OriginalData)
+```
+
+## 2.2 Make New Dataframe
+We only want to predict the future monthly revenue. So, we make a new dataframe with columns; ds for the date and y for the revenue from the original data. The 'Period' column shows the date in DD.MM.YYYY format, so we convert it to YYYY-MM-DD format to use prophet function.
+
+```{r}
+#Convert "Period" column to date format
+#Set Period column as ds and Revenue column as y
+ds <- as.Date(OriginalData$Period, format= "%d.%m.%Y")
+y <- OriginalData$Revenue
+#
+#Create new dataframe
+revenue <- data.frame(ds,y)
+#
+#See the structure of the new dataframe
+str(revenue)
+summary(revenue)
+
+```
+
+From the summary, we can see the average of the revenues over 64 months.
+
+# 3. Visualizing Historical data
+We use linear regression to model the trend in revenue over time.
+```{r}
+LinearModel <- lm(y ~ ds, revenue)
+summary(LinearModel)
+anova(LinearModel)
+```
+The linear regression model has a positive slope. It suggests that the revenue will increase by 16231 units per day. The intercept represents the revenue when the date is 0 or outside our timeframe. So,it has no real interpretation.
+
+```{r}
+plot(ds,y, main="Monthly Revenue", ylab="Revenue", xlab="Months")
+abline(LinearModel)
+```
+From the plot, we can clearly see the increasing trend over time. However, the trend has high variability. It might be because of the seasonality or any other factors in the business.
+
+Next, we can check whether the residuals follows normal distributions. Residuals is the difference between the actual and the predicted revenue.
+```{r}
+stdres<-rstandard(LinearModel)
+qqnorm(stdres, main="Q-Q Plot")
+qqline(stdres)
+```
+We can see from the plot that most of the points follow the straight line. Therefore, the assumption of normal distribution holds in this data. However, we cannot ignore the possibility of extreme outliers by looking the tail of the plot.
+
+
+# 4. Train the Model
+We fit the revenue data by using the prophet function. Prophet model can forecast future revenue and can capture the trend and seasonality of the data.
+
+```{r}
+#Fits the Prophet model with the revenue data
+TrainedRevenue <- prophet(revenue)
+```
+
+Since the dataset containts monthly revenue data, it disables daily and weekly seasonality.
+  
+# 5.Predictions
+We create future dates for the next 12 months and predict the future revenue.
+
+```{r}
+## generates a dataframe for the future dates
+FutureDates <- make_future_dataframe(TrainedRevenue, periods=12, freq = "month")
+tail(FutureDates)
+
+# making predictions of future revenues
+RevenuePredictions <- predict(TrainedRevenue, FutureDates)
+tail(RevenuePredictions[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+```
+
+
+# 6. Plot the output
+We plot the forecast. The historical revenue data is shown in black points, the forecasted values in blue points, and the light blue area indicates the intervals.
+
+```{r}
+## plot the forecast ------------------------------
+plot(TrainedRevenue, RevenuePredictions)
+
+```
+
+Overall, we can see from the plot that for the next 12 months, the revenues are expected to be increasing over time. The revenues for certain months might be lower due to seasonality but some months show a peak season.
+
+We can also plot the trend and seasonality components. We have monthly data, so it only shows the plot of trend and yearly seasonality.
+
+```{r}
+## plot components ---------------------------------
+prophet_plot_components(TrainedRevenue, RevenuePredictions)
+
+```
+
+The trend line is increasing over time. It indicates that the revenue is increasing from 2015 to the first quarter of 2021.
+The yearly seasonality seems constantly ups and downs each year. It shows that the revenue is not constantly high throughout the year. It displays the peak and low seasons throughout the year.
+
+We can also see the revenue data from the interactive plot below.
+
+```{r echo=FALSE, warning=FALSE}
+## plot with Dygraphs ------------------------------
+dyplot.prophet(TrainedRevenue,RevenuePredictions)
+```
+
+
+# References
+
+- Kaggle: <https://www.kaggle.com/datasets/podsyp/time-series-starter-dataset>
+- Meta's Prophet forecasting system: <https://facebook.github.io/prophet/docs/quick_start.html#r-api>
